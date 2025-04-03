@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image"
 	"os"
 	"path/filepath"
 
@@ -10,24 +11,25 @@ import (
 
 // FileDialog represents a file selection/input dialog
 type FileDialog struct {
-	Title       *widgets.Paragraph
-	PathInput   *widgets.Paragraph
-	CurrentPath *widgets.Paragraph
-	FileList    *widgets.List
-	InfoText    *widgets.Paragraph
-	IsOpen      bool
-	IsExport    bool
-	Callback    func(string) error
+	Title          *widgets.Paragraph
+	PathInput      *widgets.Paragraph
+	CurrentPath    *widgets.Paragraph
+	FileList       *widgets.List
+	InfoText       *widgets.Paragraph
+	IsOpen         bool
+	IsExport       bool
+	Callback       func(string) error
+	x1, y1, x2, y2 int // Coordinates for the dialog
 }
 
 // Draw implements termui.Drawable interface
 func (d *FileDialog) Draw(buf *ui.Buffer) {
-    // Draw all dialog components
-    d.Title.Draw(buf)
-    d.PathInput.Draw(buf)
-    d.CurrentPath.Draw(buf)
-    d.FileList.Draw(buf)
-    d.InfoText.Draw(buf)
+	// Draw all dialog components
+	d.Title.Draw(buf)
+	d.PathInput.Draw(buf)
+	d.CurrentPath.Draw(buf)
+	d.FileList.Draw(buf)
+	d.InfoText.Draw(buf)
 }
 
 // NewFileDialog creates a new file dialog
@@ -73,41 +75,46 @@ func NewFileDialog(isExport bool, callback func(string) error) *FileDialog {
 	}
 
 	// Initial file listing
-	dialog.updateFileList(homedir)
+	err := dialog.updateFileList(homedir)
+	if err != nil {
+		return nil
+	}
 
 	return dialog
 }
 
 // SetRect sets the dialog dimensions
 func (d *FileDialog) SetRect(x1, y1, x2, y2 int) {
-    width := x2 - x1
-    height := y2 - y1
+	// Store the coordinates
+	d.x1, d.y1, d.x2, d.y2 = x1, y1, x2, y2
 
-    // Use these variables for calculations
-    titleHeight := 3
-    inputHeight := 3
-    pathHeight := 3
-    infoHeight := 3
+	height := y2 - y1
 
-    // Title at the top
-    d.Title.SetRect(x1, y1, x2, y1+titleHeight)
+	// Rest of the method remains the same
+	titleHeight := 3
+	inputHeight := 3
+	pathHeight := 3
+	infoHeight := 3
 
-    // Info text at the bottom
-    d.InfoText.SetRect(x1, y2-infoHeight, x2, y2)
+	// Title at the top
+	d.Title.SetRect(x1, y1, x2, y1+titleHeight)
 
-    // Path input near the top
-    d.PathInput.SetRect(x1+1, y1+titleHeight, x2-1, y1+titleHeight+inputHeight)
+	// Info text at the bottom
+	d.InfoText.SetRect(x1, y2-infoHeight, x2, y2)
 
-    // Current path display
-    d.CurrentPath.SetRect(x1+1, y1+titleHeight+inputHeight, x2-1, y1+titleHeight+inputHeight+pathHeight)
+	// Path input near the top
+	d.PathInput.SetRect(x1+1, y1+titleHeight, x2-1, y1+titleHeight+inputHeight)
 
-    // File list takes the remaining space
-    listHeight := height - (titleHeight + inputHeight + pathHeight + infoHeight)
-    d.FileList.SetRect(x1+1, y1+titleHeight+inputHeight+pathHeight, x2-1, y1+titleHeight+inputHeight+pathHeight+listHeight)
+	// Current path display
+	d.CurrentPath.SetRect(x1+1, y1+titleHeight+inputHeight, x2-1, y1+titleHeight+inputHeight+pathHeight)
+
+	// File list takes the remaining space
+	listHeight := height - (titleHeight + inputHeight + pathHeight + infoHeight)
+	d.FileList.SetRect(x1+1, y1+titleHeight+inputHeight+pathHeight, x2-1, y1+titleHeight+inputHeight+pathHeight+listHeight)
 }
 
-// Draw returns the UI elements to render
-func (d *FileDialog) Draw() []ui.Drawable {
+// DrawableComponents returns the UI elements to render
+func (d *FileDialog) DrawableComponents() []ui.Drawable {
 	return []ui.Drawable{
 		d.Title,
 		d.PathInput,
@@ -239,3 +246,11 @@ func (d *FileDialog) HandleEvent(e ui.Event) (bool, error) {
 
 	return true, nil // Continue dialog
 }
+
+func (d *FileDialog) GetRect() image.Rectangle {
+	return image.Rect(d.x1, d.y1, d.x2, d.y2)
+}
+
+func (d *FileDialog) Lock() {}
+
+func (d *FileDialog) Unlock() {}
