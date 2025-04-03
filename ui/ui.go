@@ -313,33 +313,41 @@ func (a *App) handleFileDialogEvent(e ui.Event) {
 	}
 }
 
-// findAvailableTerminal checks for available terminal emulators on Linux
-func findAvailableTerminal() (string, []string, error) {
-	// List of common terminal emulators and their execution flags
+// getLinuxTerminalCommand returns the appropriate command for the available terminal
+func getLinuxTerminalCommand(workingDir, command string) (*exec.Cmd, error) {
+	// Escape the command properly for shell execution
+	shellCommand := fmt.Sprintf("cd '%s' && %s; exec bash",
+		strings.Replace(workingDir, "'", "'\\''", -1),
+		command)
+
+	// Try common terminals with correct arguments
 	terminals := []struct {
 		name string
 		args []string
 	}{
-		{"gnome-terminal", []string{"--", "bash", "-c"}},
-		{"konsole", []string{"-e", "bash", "-c"}},
-		{"xfce4-terminal", []string{"-e", "bash -c"}},
-		{"terminator", []string{"-e", "bash -c"}},
-		{"xterm", []string{"-e"}},
-		{"tilix", []string{"-e", "bash", "-c"}},
-		{"mate-terminal", []string{"-e", "bash -c"}},
-		{"urxvt", []string{"-e", "bash", "-c"}},
-		{"yakuake", []string{"-e", "bash -c"}},
+		// Most common terminal on Ubuntu/GNOME
+		{"gnome-terminal", []string{"--", "bash", "-c", shellCommand}},
+		// KDE terminal
+		{"konsole", []string{"--noclose", "-e", "bash", "-c", shellCommand}},
+		// XFCE terminal
+		{"xfce4-terminal", []string{"--hold", "-e", "bash -c '" + shellCommand + "'"}},
+		// Popular alternative terminal
+		{"terminator", []string{"-e", "bash -c '" + shellCommand + "'"}},
+		// Fallback terminal
+		{"xterm", []string{"-hold", "-e", "bash -c '" + shellCommand + "'"}},
+		// Other terminals
+		{"tilix", []string{"-e", "bash -c '" + shellCommand + "'"}},
+		{"mate-terminal", []string{"--disable-factory", "-e", "bash -c '" + shellCommand + "'"}},
 	}
 
 	for _, term := range terminals {
-		// Check if the terminal is available using the 'which' command
-		whichCmd := exec.Command("which", term.name)
-		if err := whichCmd.Run(); err == nil {
-			return term.name, term.args, nil
+		path, err := exec.LookPath(term.name)
+		if err == nil {
+			return exec.Command(path, term.args...), nil
 		}
 	}
 
-	return "", nil, fmt.Errorf("no suitable terminal emulator found")
+	return nil, fmt.Errorf("no suitable terminal emulator found")
 }
 
 // executeSelectedCommand runs the selected command in a new terminal window
@@ -360,40 +368,25 @@ func (a *App) executeSelectedCommand() {
 	switch runtime.GOOS {
 	case "linux":
 		// Find an available terminal emulator
-		termName, termArgs, err := findAvailableTerminal()
+		terminalCmd, err := getLinuxTerminalCommand(preset.WorkingDir, preset.Command)
 		if err != nil {
 			a.statusBar.Text = "Error: No suitable terminal emulator found. Please install one of: gnome-terminal, konsole, xfce4-terminal, terminator, xterm."
 			return
 		}
-
-		// Create command based on the terminal's execution style
-		cmdStr := fmt.Sprintf("cd %s && %s; bash", preset.WorkingDir, preset.Command)
-
-		// Different terminals have different ways to execute commands
-		var args []string
-		args = append(args, termArgs...)
-
-		// For terminals that expect the command as a single argument after -e
-		if termName == "xterm" || strings.HasSuffix(termArgs[0], " -c") {
-			args = append(args, cmdStr)
-		} else if len(termArgs) >= 2 && termArgs[1] == "-c" {
-			// For terminals that expect bash -c "command"
-			args = append(args[:len(args)-1], termArgs[len(termArgs)-1], cmdStr)
-		}
-
-		cmd = exec.Command(termName, args...)
+		cmd = terminalCmd
 	case "darwin":
-		// macOS terminal
+		// macOS terminal (unchanged)
 		applescript := fmt.Sprintf(`tell app "Terminal" to do script "cd %s && %s"`, preset.WorkingDir, preset.Command)
 		cmd = exec.Command("osascript", "-e", applescript)
 	case "windows":
-		// Windows command prompt
+		// Windows command prompt (unchanged)
 		cmd = exec.Command("cmd", "/C", "start", "cmd", "/K", fmt.Sprintf("cd /d %s && %s", preset.WorkingDir, preset.Command))
 	default:
 		a.statusBar.Text = "Unsupported operating system."
 		return
 	}
 
+	// Start the command but don't wait for it
 	if err := cmd.Start(); err != nil {
 		a.statusBar.Text = fmt.Sprintf("Error executing command: %v", err)
 		if runtime.GOOS == "linux" {
@@ -401,18 +394,7 @@ func (a *App) executeSelectedCommand() {
 		}
 	} else {
 		a.statusBar.Text = "Command started in new terminal."
-		if err := cmd.Wait(); err != nil {
-			a.statusBar.Text = fmt.Sprintf("Error waiting for command: %v", err)
-
-			if runtime.GOOS == "linux" {
-				a.statusBar.Text += "\nPlease ensure the terminal emulator is installed and configured correctly."
-			} else if runtime.GOOS == "windows" {
-				a.statusBar.Text += "\nEnsure that the command is valid and the working directory exists."
-			} else {
-				a.statusBar.Text += "\nEnsure that the command is valid and the working directory exists."
-
-			}
-		}
+		// Remove the cmd.Wait() call - we don't want to block waiting for the terminal to close
 	}
 }
 
