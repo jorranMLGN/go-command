@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
@@ -19,7 +20,8 @@ const (
 	FormView       View = "form"
 	HelpView       View = "help"
 	ConfirmView    View = "confirm"
-	FileDialogView View = "file_dialog" // New view type
+	FileDialogView View = "file_dialog"
+	HistoryView    View = "history" // Correct declaration
 )
 
 // App represents the application UI
@@ -31,7 +33,9 @@ type App struct {
 	help                *widgets.Paragraph
 	confirm             *widgets.Paragraph
 	statusBar           *widgets.Paragraph
-	fileDialog          *FileDialog // New field for file dialog
+	fileDialog          *FileDialog
+	history             *History
+	commandHistory      []CommandHistoryEntry
 	selectedPresetIndex int
 	pendingAction       func() error
 }
@@ -108,13 +112,14 @@ func (a *App) setupUI() {
 	a.help.Text = `
     List View:
       ↑/↓: Navigate presets
-	  Space: Toggle selected preset
+   Space: Toggle selected preset
       ->: Execute selected preset
       Enter: Execute Toggled Presets
       a: Add new preset
       d: Delete selected preset
       i: Import presets from file
       e: Export presets to file
+      v: View command history
       h: Show this help
       q: Quit
 
@@ -122,10 +127,14 @@ func (a *App) setupUI() {
       Tab: Navigate form fields
       Enter: Submit form
       Esc: Cancel and return to list
+      
+    History View:
+      ↑/↓: Navigate history
+      Esc: Return to list view
 
     General:
       Ctrl+C: Quit application
-	`
+`
 
 	// Confirm dialog
 	a.confirm = widgets.NewParagraph()
@@ -137,6 +146,11 @@ func (a *App) setupUI() {
 	a.statusBar.Title = "Status"
 	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
 	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
+
+	// command history
+	a.history = NewHistoryView()
+	a.commandHistory = make([]CommandHistoryEntry, 0)
+
 	a.resize()
 	a.updateStatusBarTips()
 }
@@ -148,7 +162,7 @@ func (a *App) updateStatusBarTips() {
 		if len(a.store.PresetList.Presets) == 0 {
 			a.statusBar.Text = "No presets | a: Add | i: Import | h: Help | q: Quit"
 		} else {
-			a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Run selected | → : Execute | a: Add | d: Delete | h: Help"
+			a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Run selected | → : Execute | a: Add | d: Delete | h: Help | i: Import | e: Export | v: View history | q: Quit"
 		}
 	case FormView:
 		a.statusBar.Text = "Tab: Next field | Shift+Tab: Previous | Enter: Submit | Esc: Cancel"
@@ -158,6 +172,8 @@ func (a *App) updateStatusBarTips() {
 		a.statusBar.Text = "y: Confirm | n: Cancel | Esc: Cancel"
 	case FileDialogView:
 		a.statusBar.Text = "↑/↓: Navigate | Enter: Select | Esc: Cancel"
+	case HistoryView:
+		a.statusBar.Text = "Command History | ↑/↓: Navigate | Esc: Return to list"
 	}
 }
 
@@ -184,6 +200,8 @@ func (a *App) resize() {
 	} else {
 		a.statusBar.SetRect(0, termHeight-5, termWidth, termHeight)
 	}
+	a.history.SetRect(0, 0, termWidth, termHeight-5)
+
 }
 
 // updateListItems updates the list of presets in the UI
@@ -250,6 +268,16 @@ func (a *App) executePreset(index int) error {
 	preset := a.store.PresetList.Presets[index]
 	var cmd *exec.Cmd
 
+	// Add command to history
+	a.history.AddEntry(
+		CommandHistoryEntry{
+			Timestamp:  time.Now().Format(time.RFC3339),
+			Command:    preset.Command,
+			WorkingDir: preset.WorkingDir,
+			Status:     "Started",
+		},
+	)
+
 	switch runtime.GOOS {
 	case "linux":
 		terminalCmd, err := getLinuxTerminalCommand(preset.WorkingDir, preset.Command)
@@ -314,8 +342,20 @@ func (a *App) getCurrentView() []ui.Drawable {
 			return []ui.Drawable{a.fileDialog, a.statusBar}
 		}
 		return []ui.Drawable{a.statusBar}
+	case HistoryView:
+		return []ui.Drawable{a.history, a.statusBar}
 	default:
 		return []ui.Drawable{a.presetList, a.statusBar}
+	}
+}
+
+// Add a new handler for history view events
+func (a *App) handleHistoryViewEvent(e ui.Event) {
+	switch e.ID {
+	case "<Escape>", "<Enter>":
+		a.currentView = ListView
+	default:
+		a.history.HandleEvent(e)
 	}
 }
 
@@ -334,6 +374,8 @@ func (a *App) handleEvent(e ui.Event) {
 		a.handleConfirmViewEvent(e)
 	case FileDialogView:
 		a.handleFileDialogEvent(e)
+	case HistoryView:
+		a.handleHistoryViewEvent(e)
 	}
 
 	if prevView != a.currentView {
@@ -371,6 +413,9 @@ func (a *App) handleListViewEvent(e ui.Event) {
 		a.exportPresets()
 	case "h":
 		a.currentView = HelpView
+	case "v": // New shortcut for viewing history
+		a.currentView = HistoryView
+		a.updateStatusBarTips()
 	}
 }
 
@@ -503,6 +548,16 @@ func (a *App) executeSelectedCommand() {
 	preset := a.store.PresetList.Presets[a.presetList.SelectedRow]
 	var cmd *exec.Cmd
 
+	// Add command to history
+	a.history.AddEntry(
+		CommandHistoryEntry{
+			Timestamp:  time.Now().Format(time.RFC3339),
+			Command:    preset.Command,
+			WorkingDir: preset.WorkingDir,
+			Status:     "Started",
+		},
+	)
+
 	switch runtime.GOOS {
 	case "linux":
 		// Find an available terminal emulator
@@ -531,8 +586,10 @@ func (a *App) executeSelectedCommand() {
 			a.statusBar.Text += "\nPlease install a terminal emulator (gnome-terminal, konsole, xfce4-terminal, terminator, xterm)."
 		}
 	} else {
-		a.statusBar.Text = "Command started in new terminal."
-		// Remove the cmd.Wait() call - we don't want to block waiting for the terminal to close
+		a.statusBar.Title = "Command started in new terminal."
+
+		// after 5 seconds, update the status bar back to the tips
+
 	}
 }
 

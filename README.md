@@ -13,6 +13,6 @@ Create your own commands and add them to the command list.
 # Build
 ## Usage
 ```bash
- goreleaser build --snapshot --rm-dist
+ goreleaser build --snapshot --clean
  ```
 
