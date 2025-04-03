@@ -1,4 +1,4 @@
-module github.com/jorranMLGN/command-presets-manager
+module github.com/jorranMLGN/go-command
 
         go 1.20
 
