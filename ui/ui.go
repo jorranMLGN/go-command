@@ -61,11 +61,32 @@ func (a *App) Run() error {
 		switch e.ID {
 		case "q", "<C-c>":
 			return nil
+		case "<Resize>":
+			a.handleResize()
 		default:
 			a.handleEvent(e)
 		}
 		ui.Render(a.getCurrentView()...)
 	}
+}
+
+// handleResize responds to terminal window resize events
+func (a *App) handleResize() {
+	a.resize()
+
+	// If file dialog is active, resize it
+	if a.currentView == FileDialogView && a.fileDialog != nil {
+		termWidth, termHeight := ui.TerminalDimensions()
+		a.fileDialog.SetRect(5, 5, termWidth-5, termHeight-7)
+	}
+
+	// Form needs to update its component positions
+	if a.currentView == FormView {
+		a.form.UpdateLayout()
+	}
+
+	a.updateListItems()
+	a.updateStatusBarTips()
 }
 
 // setupUI initializes all UI components
@@ -87,7 +108,9 @@ func (a *App) setupUI() {
 	a.help.Text = `
     List View:
       ↑/↓: Navigate presets
-      Enter: Execute selected command
+	  Space: Toggle selected preset
+      ->: Execute selected preset
+      Enter: Execute Toggled Presets
       a: Add new preset
       d: Delete selected preset
       i: Import presets from file
@@ -115,6 +138,27 @@ func (a *App) setupUI() {
 	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
 	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
 	a.resize()
+	a.updateStatusBarTips()
+}
+
+// updateStatusBarTips updates the status bar with contextual keybinding hints
+func (a *App) updateStatusBarTips() {
+	switch a.currentView {
+	case ListView:
+		if len(a.store.PresetList.Presets) == 0 {
+			a.statusBar.Text = "No presets | a: Add | i: Import | h: Help | q: Quit"
+		} else {
+			a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Run selected | → : Execute | a: Add | d: Delete | h: Help"
+		}
+	case FormView:
+		a.statusBar.Text = "Tab: Next field | Shift+Tab: Previous | Enter: Submit | Esc: Cancel"
+	case HelpView:
+		a.statusBar.Text = "Press Esc or Enter to return to list view"
+	case ConfirmView:
+		a.statusBar.Text = "y: Confirm | n: Cancel | Esc: Cancel"
+	case FileDialogView:
+		a.statusBar.Text = "↑/↓: Navigate | Enter: Select | Esc: Cancel"
+	}
 }
 
 // resize updates UI component sizes based on terminal dimensions
@@ -142,19 +186,103 @@ func (a *App) resize() {
 	}
 }
 
-// updateListItems updates the list with current presets
+// updateListItems updates the list of presets in the UI
 func (a *App) updateListItems() {
 	items := make([]string, 0, len(a.store.PresetList.Presets))
 	for _, preset := range a.store.PresetList.Presets {
-		items = append(items, fmt.Sprintf("%s | %s | %s", preset.Name, preset.Command, preset.WorkingDir))
+		enabledMark := " [ ]"
+		if preset.Enabled {
+			enabledMark = " [✓]"
+		}
+		items = append(items, fmt.Sprintf("%s %s | %s | %s",
+			enabledMark, preset.Name, preset.Command, preset.WorkingDir))
 	}
 	a.presetList.Rows = items
 
 	// Set SelectedRow based on whether there are items
 	if len(items) > 0 {
-		a.presetList.SelectedRow = 0
+		if a.presetList.SelectedRow < 0 || a.presetList.SelectedRow >= len(items) {
+			a.presetList.SelectedRow = 0
+		}
 	} else {
 		a.presetList.SelectedRow = -1
+	}
+}
+
+// executePreset runs the command for the given preset index
+func (a *App) runEnabledPresets() {
+	enabledPresets := 0
+	for _, preset := range a.store.PresetList.Presets {
+		if preset.Enabled {
+			enabledPresets++
+		}
+	}
+
+	if enabledPresets == 0 {
+		a.statusBar.Text = "No presets selected. Toggle presets with 'Space' key."
+		return
+	}
+
+	a.statusBar.Text = fmt.Sprintf("Executing %d selected commands...", enabledPresets)
+
+	// Run all enabled presets
+	executedCount := 0
+	for i, preset := range a.store.PresetList.Presets {
+		if preset.Enabled {
+			if err := a.executePreset(i); err != nil {
+				a.statusBar.Text = fmt.Sprintf("Error executing preset '%s': %v",
+					preset.Name, err)
+				return
+			}
+			executedCount++
+		}
+	}
+
+	a.statusBar.Text = fmt.Sprintf("Successfully executed %d commands.", executedCount)
+}
+
+// executePreset runs the command for the given preset index
+func (a *App) executePreset(index int) error {
+	if index < 0 || index >= len(a.store.PresetList.Presets) {
+		return fmt.Errorf("invalid preset index")
+	}
+
+	preset := a.store.PresetList.Presets[index]
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "linux":
+		terminalCmd, err := getLinuxTerminalCommand(preset.WorkingDir, preset.Command)
+		if err != nil {
+			return err
+		}
+		cmd = terminalCmd
+	case "darwin":
+		applescript := fmt.Sprintf(`tell app "Terminal" to do script "cd %s && %s"`,
+			preset.WorkingDir, preset.Command)
+		cmd = exec.Command("osascript", "-e", applescript)
+	case "windows":
+		cmd = exec.Command("cmd", "/C", "start", "cmd", "/K",
+			fmt.Sprintf("cd /d %s && %s", preset.WorkingDir, preset.Command))
+	default:
+		return fmt.Errorf("unsupported operating system")
+	}
+
+	return cmd.Start()
+}
+
+// toggleSelectedPreset toggles the enabled state of the selected preset
+func (a *App) toggleSelectedPreset() {
+	if len(a.store.PresetList.Presets) == 0 || a.presetList.SelectedRow < 0 {
+		return
+	}
+
+	idx := a.presetList.SelectedRow
+	a.store.PresetList.Presets[idx].Enabled = !a.store.PresetList.Presets[idx].Enabled
+	a.updateListItems()
+
+	if err := a.store.Save(); err != nil {
+		a.statusBar.Text = fmt.Sprintf("Error saving preset state: %v", err)
 	}
 }
 
@@ -193,6 +321,8 @@ func (a *App) getCurrentView() []ui.Drawable {
 
 // handleEvent processes UI events
 func (a *App) handleEvent(e ui.Event) {
+	prevView := a.currentView
+
 	switch a.currentView {
 	case ListView:
 		a.handleListViewEvent(e)
@@ -205,6 +335,10 @@ func (a *App) handleEvent(e ui.Event) {
 	case FileDialogView:
 		a.handleFileDialogEvent(e)
 	}
+
+	if prevView != a.currentView {
+		a.updateStatusBarTips()
+	}
 }
 
 // handleListViewEvent handles events in the list view
@@ -215,7 +349,11 @@ func (a *App) handleListViewEvent(e ui.Event) {
 	case "k", "<Up>":
 		a.presetList.ScrollUp()
 	case "<Enter>":
+		a.runEnabledPresets()
+	case "<Right>":
 		a.executeSelectedCommand()
+	case "<Space>":
+		a.toggleSelectedPreset()
 	case "a":
 		a.form.Reset()
 		a.currentView = FormView

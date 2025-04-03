@@ -71,6 +71,44 @@ func NewForm() *Form {
 	}
 }
 
+// UpdateLayout recalculates and updates form component positions
+func (f *Form) UpdateLayout() {
+	width := f.x2 - f.x1
+
+	// Position fields vertically with proper spacing
+	labelWidth := 12
+	inputX := f.x1 + labelWidth + 1
+	inputWidth := width - labelWidth - 4
+
+	// Position each field
+	y := f.y1 + 1
+
+	f.NameField.SetRect(
+		inputX, y,
+		inputX+inputWidth, y+2,
+	)
+	y += 3
+
+	f.CommandField.SetRect(
+		inputX, y,
+		inputX+inputWidth, y+2,
+	)
+	y += 3
+
+	f.WorkdirField.SetRect(
+		inputX, y,
+		inputX+inputWidth, y+2,
+	)
+	y += 3
+
+	// Position submit button
+	buttonX := f.x1 + (width)/2 - 5
+	f.SubmitButton.SetRect(
+		buttonX, y,
+		buttonX+10, y+2,
+	)
+}
+
 // Draw implements termui.Drawable interface
 func (f *Form) Draw(buf *ui.Buffer) {
 	// Draw all form components
