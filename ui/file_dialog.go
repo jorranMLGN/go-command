@@ -20,6 +20,16 @@ type FileDialog struct {
 	Callback    func(string) error
 }
 
+// Draw implements termui.Drawable interface
+func (d *FileDialog) Draw(buf *ui.Buffer) {
+    // Draw all dialog components
+    d.Title.Draw(buf)
+    d.PathInput.Draw(buf)
+    d.CurrentPath.Draw(buf)
+    d.FileList.Draw(buf)
+    d.InfoText.Draw(buf)
+}
+
 // NewFileDialog creates a new file dialog
 func NewFileDialog(isExport bool, callback func(string) error) *FileDialog {
 	title := widgets.NewParagraph()
@@ -70,24 +80,30 @@ func NewFileDialog(isExport bool, callback func(string) error) *FileDialog {
 
 // SetRect sets the dialog dimensions
 func (d *FileDialog) SetRect(x1, y1, x2, y2 int) {
-	width := x2 - x1
-	height := y2 - y1
-	padding := 1
+    width := x2 - x1
+    height := y2 - y1
 
-	// Title at the top
-	d.Title.SetRect(x1, y1, x2, y1+3)
+    // Use these variables for calculations
+    titleHeight := 3
+    inputHeight := 3
+    pathHeight := 3
+    infoHeight := 3
 
-	// Info text at the bottom
-	d.InfoText.SetRect(x1, y2-3, x2, y2)
+    // Title at the top
+    d.Title.SetRect(x1, y1, x2, y1+titleHeight)
 
-	// Path input near the top
-	d.PathInput.SetRect(x1+padding, y1+3, x2-padding, y1+6)
+    // Info text at the bottom
+    d.InfoText.SetRect(x1, y2-infoHeight, x2, y2)
 
-	// Current path display
-	d.CurrentPath.SetRect(x1+padding, y1+6, x2-padding, y1+9)
+    // Path input near the top
+    d.PathInput.SetRect(x1+1, y1+titleHeight, x2-1, y1+titleHeight+inputHeight)
 
-	// File list takes the remaining space
-	d.FileList.SetRect(x1+padding, y1+9, x2-padding, y2-3)
+    // Current path display
+    d.CurrentPath.SetRect(x1+1, y1+titleHeight+inputHeight, x2-1, y1+titleHeight+inputHeight+pathHeight)
+
+    // File list takes the remaining space
+    listHeight := height - (titleHeight + inputHeight + pathHeight + infoHeight)
+    d.FileList.SetRect(x1+1, y1+titleHeight+inputHeight+pathHeight, x2-1, y1+titleHeight+inputHeight+pathHeight+listHeight)
 }
 
 // Draw returns the UI elements to render

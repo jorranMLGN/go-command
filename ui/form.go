@@ -69,46 +69,73 @@ func NewForm() *Form {
 	}
 }
 
+// Draw implements termui.Drawable interface
+func (f *Form) Draw(buf *ui.Buffer) {
+    // Draw all form components
+    f.Title.Draw(buf)
+    f.NameLabel.Draw(buf)
+    f.NameField.Draw(buf)
+    f.CommandLabel.Draw(buf)
+    f.CommandField.Draw(buf)
+    f.WorkdirLabel.Draw(buf)
+    f.WorkdirField.Draw(buf)
+    f.SubmitButton.Draw(buf)
+}
+
 // SetRect sets the form dimensions
 func (f *Form) SetRect(x1, y1, x2, y2 int) {
-	width := x2 - x1
-	height := y2 - y1
-	padding := 1
-	fieldHeight := 3
-	labelHeight := 1
+    width := x2 - x1
+    height := y2 - y1
+    padding := 1
+    fieldHeight := 3
+    labelHeight := 1
 
-	fieldWidth := width - 2*padding
+    fieldWidth := width - 2*padding
 
-	currentY := y1 + padding
+    // Use these variables in calculations
+    currentY := y1 + padding
 
-	// Title
-	f.Title.SetRect(x1+padding, currentY, x2-padding, currentY+labelHeight)
-	currentY += labelHeight + 1
+    // Title
+    f.Title.SetRect(x1+padding, currentY, x2-padding, currentY+labelHeight)
+    currentY += labelHeight + 1
 
-	// Name field
-	f.NameLabel.SetRect(x1+padding, currentY, x2-padding, currentY+labelHeight)
-	currentY += labelHeight
-	f.NameField.SetRect(x1+padding, currentY, x2-padding, currentY+fieldHeight)
-	currentY += fieldHeight + 1
+    // Name field - use fieldWidth
+    f.NameLabel.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+labelHeight)
+    currentY += labelHeight
+    f.NameField.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+fieldHeight)
+    currentY += fieldHeight + 1
 
-	// Command field
-	f.CommandLabel.SetRect(x1+padding, currentY, x2-padding, currentY+labelHeight)
-	currentY += labelHeight
-	f.CommandField.SetRect(x1+padding, currentY, x2-padding, currentY+fieldHeight)
-	currentY += fieldHeight + 1
+    // Command field - use fieldWidth
+    f.CommandLabel.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+labelHeight)
+    currentY += labelHeight
+    f.CommandField.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+fieldHeight)
+    currentY += fieldHeight + 1
 
-	// Working directory field
-	f.WorkdirLabel.SetRect(x1+padding, currentY, x2-padding, currentY+labelHeight)
-	currentY += labelHeight
-	f.WorkdirField.SetRect(x1+padding, currentY, x2-padding, currentY+fieldHeight)
-	currentY += fieldHeight + 2
+    // Working directory field - use fieldWidth
+    f.WorkdirLabel.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+labelHeight)
+    currentY += labelHeight
+    f.WorkdirField.SetRect(x1+padding, currentY, x1+padding+fieldWidth, currentY+fieldHeight)
+    currentY += fieldHeight + 2
 
-	// Submit button
-	buttonWidth := 20
-	buttonX := x1 + (width - buttonWidth)/2
-	f.SubmitButton.SetRect(buttonX, currentY, buttonX+buttonWidth, currentY+fieldHeight)
+    // Submit button - ensure it doesn't exceed remaining height
+    buttonWidth := 20
+    buttonX := x1 + (width - buttonWidth)/2
+    remainingHeight := y2 - currentY - padding
+    if remainingHeight >= fieldHeight {
+        f.SubmitButton.SetRect(buttonX, currentY, buttonX+buttonWidth, currentY+min(fieldHeight, remainingHeight))
+    } else {
+        f.SubmitButton.SetRect(buttonX, currentY, buttonX+buttonWidth, currentY+1)
+    }
 
-	f.updateActiveField()
+    f.updateActiveField()
+}
+
+// Add helper function min
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
 }
 
 // updateActiveField updates the visual style of the active field

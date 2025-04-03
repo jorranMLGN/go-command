@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 
@@ -149,6 +148,7 @@ func (a *App) getCurrentView() []ui.Drawable {
 	case ListView:
 		return []ui.Drawable{a.presetList, a.statusBar}
 	case FormView:
+		// Form implements Drawable now
 		return []ui.Drawable{a.form, a.statusBar}
 	case HelpView:
 		return []ui.Drawable{a.help, a.statusBar}
@@ -156,7 +156,8 @@ func (a *App) getCurrentView() []ui.Drawable {
 		return []ui.Drawable{a.presetList, a.confirm, a.statusBar}
 	case FileDialogView:
 		if a.fileDialog != nil {
-			return append(a.fileDialog.Draw(), a.statusBar)
+			// FileDialog implements Drawable now
+			return []ui.Drawable{a.fileDialog, a.statusBar}
 		}
 		return []ui.Drawable{a.statusBar}
 	default:
