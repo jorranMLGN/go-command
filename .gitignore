@@ -20,3 +20,5 @@
 # IDEA
  .idea/
 
+# Build output
+ dist/
