@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	ui "github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
@@ -14,32 +15,32 @@ import (
 type View string
 
 const (
-	ListView      View = "list"
-	FormView      View = "form"
-	HelpView      View = "help"
-	ConfirmView   View = "confirm"
-	FileDialogView View = "file_dialog"  // New view type
+	ListView       View = "list"
+	FormView       View = "form"
+	HelpView       View = "help"
+	ConfirmView    View = "confirm"
+	FileDialogView View = "file_dialog" // New view type
 )
 
 // App represents the application UI
 type App struct {
-	store              *data.Store
-	currentView        View
-	presetList         *widgets.List
-	form               *Form
-	help               *widgets.Paragraph
-	confirm            *widgets.Paragraph
-	statusBar          *widgets.Paragraph
-	fileDialog         *FileDialog  // New field for file dialog
+	store               *data.Store
+	currentView         View
+	presetList          *widgets.List
+	form                *Form
+	help                *widgets.Paragraph
+	confirm             *widgets.Paragraph
+	statusBar           *widgets.Paragraph
+	fileDialog          *FileDialog // New field for file dialog
 	selectedPresetIndex int
-	pendingAction      func() error
+	pendingAction       func() error
 }
 
 // NewApp creates a new UI application
 func NewApp(store *data.Store) *App {
 	return &App{
-		store:       store,
-		currentView: ListView,
+		store:               store,
+		currentView:         ListView,
 		selectedPresetIndex: -1,
 	}
 }
@@ -75,6 +76,7 @@ func (a *App) setupUI() {
 	a.presetList.TextStyle = ui.NewStyle(ui.ColorYellow)
 	a.presetList.WrapText = true
 	a.presetList.SelectedRowStyle = ui.NewStyle(ui.ColorBlack, ui.ColorYellow)
+	a.presetList.SelectedRow = -1 // Explicitly set to -1 initially
 
 	// Form view
 	a.form = NewForm()
@@ -108,8 +110,10 @@ func (a *App) setupUI() {
 
 	// Status bar
 	a.statusBar = widgets.NewParagraph()
-	a.statusBar.Border = false
-
+	a.statusBar.Border = true
+	a.statusBar.Title = "Status"
+	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
+	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
 	a.resize()
 }
 
@@ -130,7 +134,12 @@ func (a *App) resize() {
 	a.confirm.SetRect(10, 10, termWidth-10, 15)
 
 	// Size status bar
-	a.statusBar.SetRect(0, termHeight-2, termWidth, termHeight)
+	if len(a.store.PresetList.Presets) == 0 {
+		// Make status bar larger when no presets are available
+		a.statusBar.SetRect(0, termHeight-7, termWidth, termHeight)
+	} else {
+		a.statusBar.SetRect(0, termHeight-5, termWidth, termHeight)
+	}
 }
 
 // updateListItems updates the list with current presets
@@ -140,12 +149,29 @@ func (a *App) updateListItems() {
 		items = append(items, fmt.Sprintf("%s | %s | %s", preset.Name, preset.Command, preset.WorkingDir))
 	}
 	a.presetList.Rows = items
+
+	// Set SelectedRow based on whether there are items
+	if len(items) > 0 {
+		a.presetList.SelectedRow = 0
+	} else {
+		a.presetList.SelectedRow = -1
+	}
 }
 
 // getCurrentView returns the UI elements for the current view
 func (a *App) getCurrentView() []ui.Drawable {
 	switch a.currentView {
 	case ListView:
+		// Check if presets list is empty or selected row is -1
+		if len(a.store.PresetList.Presets) == 0 || a.presetList.SelectedRow == -1 {
+			a.statusBar.Text = "No command presets available\n\n" +
+				"Available commands:\n" +
+				"• Press 'a' to add a new preset\n" +
+				"• Press 'i' to import presets from file\n" +
+				"• Press 'h' to view all commands and help\n" +
+				"• Press 'q' to quit"
+			return []ui.Drawable{a.statusBar}
+		}
 		return []ui.Drawable{a.presetList, a.statusBar}
 	case FormView:
 		// Form implements Drawable now
@@ -287,8 +313,42 @@ func (a *App) handleFileDialogEvent(e ui.Event) {
 	}
 }
 
+// findAvailableTerminal checks for available terminal emulators on Linux
+func findAvailableTerminal() (string, []string, error) {
+	// List of common terminal emulators and their execution flags
+	terminals := []struct {
+		name string
+		args []string
+	}{
+		{"gnome-terminal", []string{"--", "bash", "-c"}},
+		{"konsole", []string{"-e", "bash", "-c"}},
+		{"xfce4-terminal", []string{"-e", "bash -c"}},
+		{"terminator", []string{"-e", "bash -c"}},
+		{"xterm", []string{"-e"}},
+		{"tilix", []string{"-e", "bash", "-c"}},
+		{"mate-terminal", []string{"-e", "bash -c"}},
+		{"urxvt", []string{"-e", "bash", "-c"}},
+		{"yakuake", []string{"-e", "bash -c"}},
+	}
+
+	for _, term := range terminals {
+		// Check if the terminal is available using the 'which' command
+		whichCmd := exec.Command("which", term.name)
+		if err := whichCmd.Run(); err == nil {
+			return term.name, term.args, nil
+		}
+	}
+
+	return "", nil, fmt.Errorf("no suitable terminal emulator found")
+}
+
 // executeSelectedCommand runs the selected command in a new terminal window
 func (a *App) executeSelectedCommand() {
+	if len(a.store.PresetList.Presets) == 0 {
+		a.statusBar.Text = "No presets available. Press 'a' to add a new preset."
+		return
+	}
+
 	if a.presetList.SelectedRow < 0 || a.presetList.SelectedRow >= len(a.store.PresetList.Presets) {
 		a.statusBar.Text = "No preset selected."
 		return
@@ -299,9 +359,29 @@ func (a *App) executeSelectedCommand() {
 
 	switch runtime.GOOS {
 	case "linux":
-		// Use common terminals on Linux
-		cmd = exec.Command("xterm", "-e", fmt.Sprintf("cd %s && %s; bash", preset.WorkingDir, preset.Command))
-		// Alternative: terminal -e "cd dir && command"
+		// Find an available terminal emulator
+		termName, termArgs, err := findAvailableTerminal()
+		if err != nil {
+			a.statusBar.Text = "Error: No suitable terminal emulator found. Please install one of: gnome-terminal, konsole, xfce4-terminal, terminator, xterm."
+			return
+		}
+
+		// Create command based on the terminal's execution style
+		cmdStr := fmt.Sprintf("cd %s && %s; bash", preset.WorkingDir, preset.Command)
+
+		// Different terminals have different ways to execute commands
+		var args []string
+		args = append(args, termArgs...)
+
+		// For terminals that expect the command as a single argument after -e
+		if termName == "xterm" || strings.HasSuffix(termArgs[0], " -c") {
+			args = append(args, cmdStr)
+		} else if len(termArgs) >= 2 && termArgs[1] == "-c" {
+			// For terminals that expect bash -c "command"
+			args = append(args[:len(args)-1], termArgs[len(termArgs)-1], cmdStr)
+		}
+
+		cmd = exec.Command(termName, args...)
 	case "darwin":
 		// macOS terminal
 		applescript := fmt.Sprintf(`tell app "Terminal" to do script "cd %s && %s"`, preset.WorkingDir, preset.Command)
@@ -316,8 +396,23 @@ func (a *App) executeSelectedCommand() {
 
 	if err := cmd.Start(); err != nil {
 		a.statusBar.Text = fmt.Sprintf("Error executing command: %v", err)
+		if runtime.GOOS == "linux" {
+			a.statusBar.Text += "\nPlease install a terminal emulator (gnome-terminal, konsole, xfce4-terminal, terminator, xterm)."
+		}
 	} else {
 		a.statusBar.Text = "Command started in new terminal."
+		if err := cmd.Wait(); err != nil {
+			a.statusBar.Text = fmt.Sprintf("Error waiting for command: %v", err)
+
+			if runtime.GOOS == "linux" {
+				a.statusBar.Text += "\nPlease ensure the terminal emulator is installed and configured correctly."
+			} else if runtime.GOOS == "windows" {
+				a.statusBar.Text += "\nEnsure that the command is valid and the working directory exists."
+			} else {
+				a.statusBar.Text += "\nEnsure that the command is valid and the working directory exists."
+
+			}
+		}
 	}
 }
 

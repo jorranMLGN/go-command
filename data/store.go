@@ -3,7 +3,6 @@ package data
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -43,7 +42,7 @@ func NewStore() (*Store, error) {
 
 // Load reads presets from the config file
 func (s *Store) Load() error {
-	data, err := ioutil.ReadFile(s.configFile)
+	data, err := os.ReadFile(s.configFile)
 	if err != nil {
 		return err
 	}
@@ -58,7 +57,7 @@ func (s *Store) Save() error {
 		return fmt.Errorf("failed to marshal presets: %v", err)
 	}
 
-	return ioutil.WriteFile(s.configFile, data, 0644)
+	return os.WriteFile(s.configFile, data, 0644)
 }
 
 // AddPreset adds a new preset to the store
@@ -78,7 +77,7 @@ func (s *Store) RemovePreset(index int) error {
 
 // ImportPresets imports presets from a JSON file
 func (s *Store) ImportPresets(filePath string) error {
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
@@ -99,5 +98,5 @@ func (s *Store) ExportPresets(filePath string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filePath, data, 0644)
+	return os.WriteFile(filePath, data, 0644)
 }
