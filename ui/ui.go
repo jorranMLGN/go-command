@@ -58,6 +58,7 @@ func (a *App) Run() error {
 
 	a.setupUI()
 	a.updateListItems()
+	ui.Render(a.getCurrentView()...)
 
 	uiEvents := ui.PollEvents()
 	for {
