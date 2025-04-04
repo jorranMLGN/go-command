@@ -212,7 +212,7 @@ func (a *App) updateListItems() {
 		if preset.Enabled {
 			enabledMark = " [✓]"
 		}
-		items = append(items, fmt.Sprintf("%s %s | %s | %s",
+		items = append(items, fmt.Sprintf("%-3s %-20.20s | %-40.40s | %-20.50s",
 			enabledMark, preset.Name, preset.Command, preset.WorkingDir))
 	}
 	a.presetList.Rows = items
@@ -307,6 +307,7 @@ func (a *App) toggleSelectedPreset() {
 
 	idx := a.presetList.SelectedRow
 	a.store.PresetList.Presets[idx].Enabled = !a.store.PresetList.Presets[idx].Enabled
+
 	a.updateListItems()
 
 	if err := a.store.Save(); err != nil {
