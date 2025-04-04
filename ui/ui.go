@@ -98,7 +98,7 @@ func (a *App) handleResize() {
 func (a *App) setupUI() {
 	// List view
 	a.presetList = widgets.NewList()
-	a.presetList.Title = "Command Presets"
+	a.presetList.Title = "| Command Presets |"
 	a.presetList.TextStyle = ui.NewStyle(ui.ColorWhite)
 	a.presetList.WrapText = true
 	a.presetList.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorMagenta, ui.ModifierBold)
@@ -144,7 +144,7 @@ func (a *App) setupUI() {
 	// Status bar
 	a.statusBar = widgets.NewParagraph()
 	a.statusBar.Border = true
-	a.statusBar.Title = "Status | Made by JorranMLGN"
+	a.statusBar.Title = "| Made by JorranMLGN |"
 	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
 	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
 
@@ -163,7 +163,8 @@ func (a *App) updateStatusBarTips() {
 		if len(a.store.PresetList.Presets) == 0 {
 			a.statusBar.Text = "No presets | a: Add | i: Import | h: Help | q: Quit"
 		} else {
-			a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Run selected | → : Execute | a: Add | d: Delete | h: Help | i: Import | e: Export | v: View history | q: Quit"
+			//a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Run selected | → : Execute | a: Add | d: Delete | h: Help | i: Import | e: Export | v: View history | q: Quit"
+			a.statusBar.Text = "↑/↓: Navigate | Space: Toggle | Enter: Execute selected | → : Execute single | a: Add | d: Delete | h: Help | v: View history | q: Quit"
 		}
 	case FormView:
 		a.statusBar.Text = "Tab: Next field | Shift+Tab: Previous | Enter: Submit | Esc: Cancel"
@@ -415,11 +416,14 @@ func (a *App) handleListViewEvent(e ui.Event) {
 			a.confirm.Text = "Are you sure you want to delete this preset? (y/n)"
 			a.pendingAction = a.deleteSelectedPreset
 			a.currentView = ConfirmView
+
 		}
-	case "i":
-		a.importPresets()
-	case "e":
-		a.exportPresets()
+
+		// TODO: Fix
+	//case "i":
+	//	a.importPresets()
+	//case "e":
+	//	a.exportPresets()
 	case "h":
 		a.currentView = HelpView
 	case "v": // New shortcut for viewing history
@@ -617,6 +621,7 @@ func (a *App) deleteSelectedPreset() error {
 	return nil
 }
 
+// TODO: Fix
 // importPresets imports presets from a file using a file dialog
 func (a *App) importPresets() {
 	// Create file dialog
@@ -643,6 +648,7 @@ func (a *App) importPresets() {
 	a.statusBar.Text = "Select a JSON file to import presets."
 }
 
+// TODO: Fix
 // exportPresets exports presets to a file using a file dialog
 func (a *App) exportPresets() {
 	// Create file dialog
