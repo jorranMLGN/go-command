@@ -98,9 +98,9 @@ func (a *App) setupUI() {
 	// List view
 	a.presetList = widgets.NewList()
 	a.presetList.Title = "Command Presets"
-	a.presetList.TextStyle = ui.NewStyle(ui.ColorYellow)
+	a.presetList.TextStyle = ui.NewStyle(ui.ColorWhite)
 	a.presetList.WrapText = true
-	a.presetList.SelectedRowStyle = ui.NewStyle(ui.ColorBlack, ui.ColorYellow)
+	a.presetList.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorMagenta, ui.ModifierBold)
 	a.presetList.SelectedRow = -1 // Explicitly set to -1 initially
 
 	// Form view
@@ -208,13 +208,20 @@ func (a *App) resize() {
 func (a *App) updateListItems() {
 	items := make([]string, 0, len(a.store.PresetList.Presets))
 	for _, preset := range a.store.PresetList.Presets {
+		var name string
 		enabledMark := " [ ]"
+
 		if preset.Enabled {
 			enabledMark = " [✓]"
+			name = strings.ToUpper(preset.Name) // Make toggled items bold via uppercase
+		} else {
+			name = preset.Name
 		}
+
 		items = append(items, fmt.Sprintf("%-3s %-20.20s | %-40.40s | %-20.50s",
-			enabledMark, preset.Name, preset.Command, preset.WorkingDir))
+			enabledMark, name, preset.Command, preset.WorkingDir))
 	}
+
 	a.presetList.Rows = items
 
 	// Set SelectedRow based on whether there are items

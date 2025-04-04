@@ -52,7 +52,7 @@ func NewForm() *Form {
 	dirField.Border = true
 
 	submitBtn := widgets.NewParagraph()
-	submitBtn.Text = "[ Save ]"
+	submitBtn.Text = " =-=-= Save =-=-= "
 	submitBtn.Border = true
 
 	fields := []*widgets.Paragraph{nameField, cmdField, dirField, submitBtn}
@@ -107,6 +107,7 @@ func (f *Form) UpdateLayout() {
 		buttonX, y,
 		buttonX+10, y+2,
 	)
+
 }
 
 // Draw implements termui.Drawable interface
