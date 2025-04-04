@@ -144,7 +144,7 @@ func (a *App) setupUI() {
 	// Status bar
 	a.statusBar = widgets.NewParagraph()
 	a.statusBar.Border = true
-	a.statusBar.Title = "Status"
+	a.statusBar.Title = "Status | Made by JorranMLGN"
 	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
 	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
 
