@@ -38,6 +38,7 @@ type App struct {
 	commandHistory      []CommandHistoryEntry
 	selectedPresetIndex int
 	pendingAction       func() error
+	showHistory         bool // Add a flag to toggle the history sidebar
 }
 
 // NewApp creates a new UI application
@@ -46,6 +47,7 @@ func NewApp(store *data.Store) *App {
 		store:               store,
 		currentView:         ListView,
 		selectedPresetIndex: -1,
+		showHistory:         true, // Show history sidebar by default
 	}
 }
 
@@ -90,6 +92,12 @@ func (a *App) handleResize() {
 		a.form.UpdateLayout()
 	}
 
+	// Special handling for history view when it's the primary view
+	if a.currentView == HistoryView {
+		termWidth, termHeight := ui.TerminalDimensions()
+		a.history.SetRect(0, 0, termWidth, termHeight-5)
+	}
+
 	a.updateListItems()
 	a.updateStatusBarTips()
 }
@@ -120,7 +128,7 @@ func (a *App) setupUI() {
       d: Delete selected preset
       i: Import presets from file
       e: Export presets to file
-      v: View command history
+      v: Navigate history
       h: Show this help
       q: Quit
 
@@ -182,28 +190,32 @@ func (a *App) updateStatusBarTips() {
 // resize updates UI component sizes based on terminal dimensions
 func (a *App) resize() {
 	termWidth, termHeight := ui.TerminalDimensions()
-
-	// Size list view
-	a.presetList.SetRect(0, 0, termWidth, termHeight-2)
-
-	// Size form view
+	
+	// Define the width for the sidebar (history view)
+	sidebarWidth := termWidth / 3
+	mainWidth := termWidth - sidebarWidth
+	
+	// Size list view (left side)
+	a.presetList.SetRect(0, 0, mainWidth, termHeight-5)
+	
+	// Size history view (right side)
+	a.history.SetRect(mainWidth, 0, termWidth, termHeight-5)
+	
+	// Size form view (center dialog)
 	a.form.SetRect(5, 5, termWidth-5, termHeight-5)
-
-	// Size help view
+	
+	// Size help view (center dialog)
 	a.help.SetRect(5, 5, termWidth-5, termHeight-5)
-
-	// Size confirm dialog
+	
+	// Size confirm dialog (center)
 	a.confirm.SetRect(10, 10, termWidth-10, 15)
-
-	// Size status bar
-	if len(a.store.PresetList.Presets) == 0 {
-		// Make status bar larger when no presets are available
-		a.statusBar.SetRect(0, termHeight-7, termWidth, termHeight)
-	} else {
-		a.statusBar.SetRect(0, termHeight-5, termWidth, termHeight)
-	}
-	a.history.SetRect(0, 0, termWidth, termHeight-5)
-
+	
+	// Size status bar (bottom)
+	a.statusBar.SetRect(0, termHeight-5, termWidth, termHeight)
+	
+	// Update history list titles
+	a.presetList.Title = "| Command Presets |"
+	a.history.list.Title = "| Command History |"
 }
 
 // updateListItems updates the list of presets in the UI
@@ -330,13 +342,22 @@ func (a *App) getCurrentView() []ui.Drawable {
 	case ListView:
 		// Check if presets list is empty or selected row is -1
 		if len(a.store.PresetList.Presets) == 0 || a.presetList.SelectedRow == -1 {
-			a.statusBar.Text = "No command presets available\n\n" +
-				"Available commands:\n" +
-				"• Press 'a' to add a new preset\n" +
-				"• Press 'i' to import presets from file\n" +
-				"• Press 'h' to view all commands and help\n" +
-				"• Press 'q' to quit"
+			if a.showHistory {
+				// Show the empty state message with history sidebar
+				a.statusBar.Text = "No command presets available\n\n" +
+					"Available commands:\n" +
+					"• Press 'a' to add a new preset\n" +
+					"• Press 'i' to import presets from file\n" +
+					"• Press 'h' to view all commands and help\n" +
+					"• Press 'q' to quit"
+				return []ui.Drawable{a.statusBar, a.history}
+			}
 			return []ui.Drawable{a.statusBar}
+		}
+		
+		// Return both the preset list and history sidebar
+		if a.showHistory {
+			return []ui.Drawable{a.presetList, a.history, a.statusBar}
 		}
 		return []ui.Drawable{a.presetList, a.statusBar}
 	case FormView:
@@ -353,7 +374,7 @@ func (a *App) getCurrentView() []ui.Drawable {
 		}
 		return []ui.Drawable{a.statusBar}
 	case HistoryView:
-		return []ui.Drawable{a.history, a.statusBar}
+		return []ui.Drawable{a.presetList,a.history, a.statusBar}
 	default:
 		return []ui.Drawable{a.presetList, a.statusBar}
 	}
@@ -364,8 +385,12 @@ func (a *App) handleHistoryViewEvent(e ui.Event) {
 	switch e.ID {
 	case "<Escape>", "<Enter>":
 		a.currentView = ListView
+		// Reset the layout to the proper split view when returning to list view
+		a.resize()
 	default:
 		a.history.HandleEvent(e)
+		a.resize()
+
 	}
 }
 
@@ -418,6 +443,8 @@ func (a *App) handleListViewEvent(e ui.Event) {
 			a.currentView = ConfirmView
 
 		}
+	case "v":
+		a.history.list.ScrollBottom()
 
 		// TODO: Fix
 	//case "i":
@@ -426,8 +453,6 @@ func (a *App) handleListViewEvent(e ui.Event) {
 	//	a.exportPresets()
 	case "h":
 		a.currentView = HelpView
-	case "v": // New shortcut for viewing history
-		a.currentView = HistoryView
 		a.updateStatusBarTips()
 	}
 }
