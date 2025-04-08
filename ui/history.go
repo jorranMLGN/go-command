@@ -40,8 +40,11 @@ func (h *History) Unlock() {
 // NewHistoryView creates a new history view
 func NewHistoryView() *History {
 	list := widgets.NewList()
-	list.Title = "Command History"
+	list.Title = "| History |"
+	list.TitleStyle.Fg = ui.ColorWhite
+	
 	list.TextStyle = ui.NewStyle(ui.ColorWhite)
+	list.BorderStyle.Fg = ui.ColorYellow
 	list.WrapText = true
 
 	return &History{
@@ -163,13 +166,33 @@ func (h *History) Draw(buf *ui.Buffer) {
 
 // HandleEvent handles UI events
 func (h *History) HandleEvent(e ui.Event) {
+
+	if len(h.list.Rows) == 0 {
+	h.AddEntry(CommandHistoryEntry{
+		Timestamp:  time.Now().Format(time.RFC3339),
+		Command:    "No history available",
+		WorkingDir: "",
+		Status:     "",
+	})
+		return
+	}
 	switch e.ID {
 	case "j", "<Down>":
 		h.list.ScrollDown()
-		
-
 	case "k", "<Up>":
 		h.list.ScrollUp()
-
+	case "g", "<Home>":
+		h.list.ScrollTop()
+	case "G", "<End>":
+		h.list.ScrollBottom()
+	case "<PageUp>":
+		h.list.ScrollPageUp()
+	case "<PageDown>":
+		h.list.ScrollPageDown()
+	case "<Space>":
+		h.list.ScrollHalfPageDown()
+	case "<Backspace>":
+		h.list.ScrollHalfPageUp()
+		
  	}
 }

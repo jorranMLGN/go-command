@@ -107,6 +107,7 @@ func (a *App) setupUI() {
 	// List view
 	a.presetList = widgets.NewList()
 	a.presetList.Title = "| Command Presets |"
+	a.presetList.Border = true
 	a.presetList.TextStyle = ui.NewStyle(ui.ColorWhite)
 	a.presetList.WrapText = true
 	a.presetList.SelectedRowStyle = ui.NewStyle(ui.ColorWhite, ui.ColorMagenta, ui.ModifierBold)
@@ -152,6 +153,7 @@ func (a *App) setupUI() {
 	// Status bar
 	a.statusBar = widgets.NewParagraph()
 	a.statusBar.Border = true
+	a.statusBar.BorderStyle = ui.NewStyle(ui.ColorGreen)
 	a.statusBar.Title = "| Made by JorranMLGN |"
 	a.statusBar.TextStyle = ui.NewStyle(ui.ColorWhite, ui.ColorClear, ui.ModifierBold)
 	a.statusBar.Text = "Welcome! Press 'a' to add a preset, 'h' for help"
@@ -214,8 +216,6 @@ func (a *App) resize() {
 	a.statusBar.SetRect(0, termHeight-5, termWidth, termHeight)
 	
 	// Update history list titles
-	a.presetList.Title = "| Command Presets |"
-	a.history.list.Title = "| Command History |"
 }
 
 // updateListItems updates the list of presets in the UI
@@ -383,10 +383,10 @@ func (a *App) getCurrentView() []ui.Drawable {
 // Add a new handler for history view events
 func (a *App) handleHistoryViewEvent(e ui.Event) {
 	switch e.ID {
-	case "<Escape>", "<Enter>":
+	case "<Escape>", "<Enter>", "<v>": // Fixed the syntax error by adding quotes around <v>
 		a.currentView = ListView
-		// Reset the layout to the proper split view when returning to list view
-		a.resize()
+		a.statusBar.Text = "Command history view closed."
+	a.resize()
 	default:
 		a.history.HandleEvent(e)
 		a.resize()
@@ -444,13 +444,9 @@ func (a *App) handleListViewEvent(e ui.Event) {
 
 		}
 	case "v":
-		a.history.list.ScrollBottom()
+		a.currentView = HistoryView
+		a.resize()
 
-		// TODO: Fix
-	//case "i":
-	//	a.importPresets()
-	//case "e":
-	//	a.exportPresets()
 	case "h":
 		a.currentView = HelpView
 		a.updateStatusBarTips()
@@ -644,51 +640,4 @@ func (a *App) deleteSelectedPreset() error {
 	a.updateListItems()
 	a.statusBar.Text = "Preset deleted successfully."
 	return nil
-}
-
-// TODO: Fix
-// importPresets imports presets from a file using a file dialog
-func (a *App) importPresets() {
-	// Create file dialog
-	dialog := NewFileDialog(false, func(filePath string) error {
-		err := a.store.ImportPresets(filePath)
-		if err != nil {
-			return err
-		}
-
-		// Save the combined presets
-		if err := a.store.Save(); err != nil {
-			return err
-		}
-
-		// Update the UI
-		a.updateListItems()
-		a.statusBar.Text = "Presets imported successfully."
-		return nil
-	})
-
-	// Show file dialog
-	a.fileDialog = dialog
-	a.currentView = FileDialogView
-	a.statusBar.Text = "Select a JSON file to import presets."
-}
-
-// TODO: Fix
-// exportPresets exports presets to a file using a file dialog
-func (a *App) exportPresets() {
-	// Create file dialog
-	dialog := NewFileDialog(true, func(filePath string) error {
-		err := a.store.ExportPresets(filePath)
-		if err != nil {
-			return err
-		}
-
-		a.statusBar.Text = "Presets exported successfully to " + filePath
-		return nil
-	})
-
-	// Show file dialog
-	a.fileDialog = dialog
-	a.currentView = FileDialogView
-	a.statusBar.Text = "Choose a location to save presets."
 }
